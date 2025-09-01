@@ -1,0 +1,33 @@
+database:
+  url: "jdbc:mysql://localhost:3306/board_db"
+  username: "root"
+  password: "password"
+  driver: "com.mysql.cj.jdbc.Driver"
+  pool:
+    initial-size: 5
+    max-size: 20
+    min-idle: 5
+
+logging:
+  level: "INFO"
+  pattern: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+ui:
+  colors:
+    enabled: true
+    primary: "BLUE"
+    success: "GREEN"
+    warning: "YELLOW"
+    error: "RED"
+    info: "CYAN"
+  
+  pagination:
+    page-size: 10
+  
+  date-format: "dd/MM/yyyy HH:mm:ss"
+
+features:
+  audit-log: true
+  statistics: true
+  export: true
+  backup: true

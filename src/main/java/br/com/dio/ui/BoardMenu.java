@@ -8,9 +8,13 @@ import br.com.dio.service.BoardColumnQueryService;
 import br.com.dio.service.BoardQueryService;
 import br.com.dio.service.CardQueryService;
 import br.com.dio.service.CardService;
+import br.com.dio.service.StatisticsService;
+import br.com.dio.ui.util.ConsoleColors;
+import br.com.dio.ui.util.InputValidator;
 import lombok.AllArgsConstructor;
 
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Scanner;
 
 import static br.com.dio.persistence.config.ConnectionConfig.getConnection;
@@ -18,26 +22,40 @@ import static br.com.dio.persistence.config.ConnectionConfig.getConnection;
 @AllArgsConstructor
 public class BoardMenu {
 
-    private final Scanner scanner = new Scanner(System.in).useDelimiter("\n");
-
+    private final Scanner scanner;
     private final BoardEntity entity;
 
+    public BoardMenu(BoardEntity entity) {
+        this.scanner = new Scanner(System.in);
+        this.entity = entity;
+    }
+
     public void execute() {
-        try {
-            System.out.printf("Bem vindo ao board %s, selecione a operação desejada\n", entity.getId());
-            var option = -1;
-            while (option != 9) {
-                System.out.println("1 - Criar um card");
-                System.out.println("2 - Mover um card");
-                System.out.println("3 - Bloquear um card");
-                System.out.println("4 - Desbloquear um card");
-                System.out.println("5 - Cancelar um card");
-                System.out.println("6 - Ver board");
-                System.out.println("7 - Ver coluna com cards");
-                System.out.println("8 - Ver card");
-                System.out.println("9 - Voltar para o menu anterior um card");
-                System.out.println("10 - Sair");
-                option = scanner.nextInt();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("BOARD: " + entity.getName());
+        
+        System.out.println(ConsoleColors.info("Bem-vindo ao board " + entity.getName() + "! Selecione a operação desejada:"));
+        
+        var option = -1;
+        while (option != 10) {
+            try {
+                ConsoleColors.printSeparator();
+                System.out.println(ConsoleColors.primary("📋 MENU DO BOARD"));
+                System.out.println("1️⃣  - Criar um card");
+                System.out.println("2️⃣  - Mover um card");
+                System.out.println("3️⃣  - Bloquear um card");
+                System.out.println("4️⃣  - Desbloquear um card");
+                System.out.println("5️⃣  - Cancelar um card");
+                System.out.println("6️⃣  - Ver board");
+                System.out.println("7️⃣  - Ver coluna com cards");
+                System.out.println("8️⃣  - Ver card");
+                System.out.println("9️⃣  - Estatísticas do board");
+                System.out.println("🔟 - Voltar para o menu anterior");
+                System.out.println("❌ - Sair");
+                
+                System.out.print(ConsoleColors.info("\nEscolha uma opção: "));
+                option = Integer.parseInt(scanner.nextLine().trim());
+                
                 switch (option) {
                     case 1 -> createCard();
                     case 2 -> moveCardToNextColumn();
@@ -47,130 +65,235 @@ public class BoardMenu {
                     case 6 -> showBoard();
                     case 7 -> showColumn();
                     case 8 -> showCard();
-                    case 9 -> System.out.println("Voltando para o menu anterior");
-                    case 10 -> System.exit(0);
-                    default -> System.out.println("Opção inválida, informe uma opção do menu");
+                    case 9 -> showStatistics();
+                    case 10 -> {
+                        System.out.println(ConsoleColors.info("🔄 Voltando para o menu anterior..."));
+                        return;
+                    }
+                    case 11 -> {
+                        System.out.println(ConsoleColors.success("👋 Obrigado por usar o gerenciador de boards!"));
+                        System.exit(0);
+                    }
+                    default -> System.out.println(ConsoleColors.error("❌ Opção inválida! Escolha uma opção válida."));
                 }
+            } catch (NumberFormatException e) {
+                System.out.println(ConsoleColors.error("❌ Opção inválida! Digite um número válido."));
+                scanner.nextLine();
+            } catch (Exception e) {
+                System.out.println(ConsoleColors.error("❌ Erro inesperado: " + e.getMessage()));
+                e.printStackTrace();
             }
-        }catch (SQLException ex){
-            ex.printStackTrace();
-            System.exit(0);
         }
     }
 
-    private void createCard() throws SQLException{
+    private void createCard() throws SQLException {
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("CRIAR NOVO CARD");
+        
         var card = new CardEntity();
-        System.out.println("Informe o título do card");
-        card.setTitle(scanner.next());
-        System.out.println("Informe a descrição do card");
-        card.setDescription(scanner.next());
+        
+        card.setTitle(InputValidator.validateNonEmptyString(scanner, "📝 Título do card: ", "título"));
+        card.setDescription(InputValidator.validateDescription(scanner, "📄 Descrição do card: "));
         card.setBoardColumn(entity.getInitialColumn());
+        
         try(var connection = getConnection()){
             new CardService(connection).create(card);
+            System.out.println(ConsoleColors.success("🎉 Card criado com sucesso!"));
+            System.out.println(ConsoleColors.info("ID do card: " + card.getId()));
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void moveCardToNextColumn() throws SQLException {
-        System.out.println("Informe o id do card que deseja mover para a próxima coluna");
-        var cardId = scanner.nextLong();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("MOVER CARD");
+        
+        Long cardId = InputValidator.validatePositiveLong(scanner, "🔄 ID do card a ser movido: ", "ID do card");
+        
         var boardColumnsInfo = entity.getBoardColumns().stream()
                 .map(bc -> new BoardColumnInfoDTO(bc.getId(), bc.getOrder(), bc.getKind()))
                 .toList();
+        
         try(var connection = getConnection()){
             new CardService(connection).moveToNextColumn(cardId, boardColumnsInfo);
+            System.out.println(ConsoleColors.success("✅ Card movido com sucesso para a próxima coluna!"));
         } catch (RuntimeException ex){
-            System.out.println(ex.getMessage());
+            System.out.println(ConsoleColors.error("❌ Erro ao mover card: " + ex.getMessage()));
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void blockCard() throws SQLException {
-        System.out.println("Informe o id do card que será bloqueado");
-        var cardId = scanner.nextLong();
-        System.out.println("Informe o motivo do bloqueio do card");
-        var reason = scanner.next();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("BLOQUEAR CARD");
+        
+        Long cardId = InputValidator.validatePositiveLong(scanner, "🚫 ID do card a ser bloqueado: ", "ID do card");
+        String reason = InputValidator.validateNonEmptyString(scanner, "📝 Motivo do bloqueio: ", "motivo do bloqueio");
+        
         var boardColumnsInfo = entity.getBoardColumns().stream()
                 .map(bc -> new BoardColumnInfoDTO(bc.getId(), bc.getOrder(), bc.getKind()))
                 .toList();
+        
         try(var connection = getConnection()){
             new CardService(connection).block(cardId, reason, boardColumnsInfo);
+            System.out.println(ConsoleColors.success("🔒 Card bloqueado com sucesso!"));
         } catch (RuntimeException ex){
-            System.out.println(ex.getMessage());
+            System.out.println(ConsoleColors.error("❌ Erro ao bloquear card: " + ex.getMessage()));
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void unblockCard() throws SQLException {
-        System.out.println("Informe o id do card que será desbloqueado");
-        var cardId = scanner.nextLong();
-        System.out.println("Informe o motivo do desbloqueio do card");
-        var reason = scanner.next();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("DESBLOQUEAR CARD");
+        
+        Long cardId = InputValidator.validatePositiveLong(scanner, "🔓 ID do card a ser desbloqueado: ", "ID do card");
+        String reason = InputValidator.validateNonEmptyString(scanner, "📝 Motivo do desbloqueio: ", "motivo do desbloqueio");
+        
         try(var connection = getConnection()){
             new CardService(connection).unblock(cardId, reason);
+            System.out.println(ConsoleColors.success("🔓 Card desbloqueado com sucesso!"));
         } catch (RuntimeException ex){
-            System.out.println(ex.getMessage());
+            System.out.println(ConsoleColors.error("❌ Erro ao desbloquear card: " + ex.getMessage()));
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void cancelCard() throws SQLException {
-        System.out.println("Informe o id do card que deseja mover para a coluna de cancelamento");
-        var cardId = scanner.nextLong();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("CANCELAR CARD");
+        
+        Long cardId = InputValidator.validatePositiveLong(scanner, "❌ ID do card a ser cancelado: ", "ID do card");
+        
         var cancelColumn = entity.getCancelColumn();
         var boardColumnsInfo = entity.getBoardColumns().stream()
                 .map(bc -> new BoardColumnInfoDTO(bc.getId(), bc.getOrder(), bc.getKind()))
                 .toList();
+        
         try(var connection = getConnection()){
             new CardService(connection).cancel(cardId, cancelColumn.getId(), boardColumnsInfo);
+            System.out.println(ConsoleColors.success("❌ Card cancelado com sucesso!"));
         } catch (RuntimeException ex){
-            System.out.println(ex.getMessage());
+            System.out.println(ConsoleColors.error("❌ Erro ao cancelar card: " + ex.getMessage()));
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void showBoard() throws SQLException {
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("VISUALIZAR BOARD");
+        
         try(var connection = getConnection()){
             var optional = new BoardQueryService(connection).showBoardDetails(entity.getId());
             optional.ifPresent(b -> {
-                System.out.printf("Board [%s,%s]\n", b.id(), b.name());
+                System.out.println(ConsoleColors.primary("📋 DETALHES DO BOARD"));
+                System.out.printf("🆔 ID: %d | 📝 Nome: %s\n", b.id(), b.name());
+                System.out.println();
+                System.out.println(ConsoleColors.info("📊 COLUNAS:"));
                 b.columns().forEach(c ->
-                        System.out.printf("Coluna [%s] tipo: [%s] tem %s cards\n", c.name(), c.kind(), c.cardsAmount())
+                        System.out.printf("📁 %s | 🏷️  Tipo: %s | 📊 Cards: %d\n", 
+                            c.name(), c.kind(), c.cardsAmount())
                 );
             });
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void showColumn() throws SQLException {
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("VISUALIZAR COLUNA");
+        
         var columnsIds = entity.getBoardColumns().stream().map(BoardColumnEntity::getId).toList();
-        var selectedColumnId = -1L;
+        Long selectedColumnId = -1L;
+        
         while (!columnsIds.contains(selectedColumnId)){
-            System.out.printf("Escolha uma coluna do board %s pelo id\n", entity.getName());
-            entity.getBoardColumns().forEach(c -> System.out.printf("%s - %s [%s]\n", c.getId(), c.getName(), c.getKind()));
-            selectedColumnId = scanner.nextLong();
+            System.out.println(ConsoleColors.info("Escolha uma coluna do board " + entity.getName() + ":"));
+            entity.getBoardColumns().forEach(c -> 
+                System.out.printf("🆔 %d - %s [%s]\n", c.getId(), c.getName(), c.getKind()));
+            
+            selectedColumnId = InputValidator.validatePositiveLong(scanner, "📋 ID da coluna: ", "ID da coluna");
+            
+            if (!columnsIds.contains(selectedColumnId)) {
+                System.out.println(ConsoleColors.error("❌ ID de coluna inválido! Tente novamente."));
+            }
         }
+        
         try(var connection = getConnection()){
             var column = new BoardColumnQueryService(connection).findById(selectedColumnId);
             column.ifPresent(co -> {
-                System.out.printf("Coluna %s tipo %s\n", co.getName(), co.getKind());
-                co.getCards().forEach(ca -> System.out.printf("Card %s - %s\nDescrição: %s",
-                        ca.getId(), ca.getTitle(), ca.getDescription()));
+                System.out.println(ConsoleColors.primary("📋 DETALHES DA COLUNA"));
+                System.out.printf("📁 Nome: %s | 🏷️  Tipo: %s\n", co.getName(), co.getKind());
+                System.out.println();
+                
+                if (co.getCards().isEmpty()) {
+                    System.out.println(ConsoleColors.info("ℹ️  Esta coluna não possui cards."));
+                } else {
+                    System.out.println(ConsoleColors.info("📊 CARDS NA COLUNA:"));
+                    co.getCards().forEach(ca -> {
+                        System.out.printf("🆔 %d - %s\n", ca.getId(), ca.getTitle());
+                        System.out.printf("📄 Descrição: %s\n", ca.getDescription());
+                        ConsoleColors.printSeparator();
+                    });
+                }
             });
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void showCard() throws SQLException {
-        System.out.println("Informe o id do card que deseja visualizar");
-        var selectedCardId = scanner.nextLong();
-        try(var connection  = getConnection()){
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("VISUALIZAR CARD");
+        
+        Long selectedCardId = InputValidator.validatePositiveLong(scanner, "🔍 ID do card: ", "ID do card");
+        
+        try(var connection = getConnection()){
             new CardQueryService(connection).findById(selectedCardId)
                     .ifPresentOrElse(
                             c -> {
-                                System.out.printf("Card %s - %s.\n", c.id(), c.title());
-                                System.out.printf("Descrição: %s\n", c.description());
-                                System.out.println(c.blocked() ?
-                                        "Está bloqueado. Motivo: " + c.blockReason() :
-                                        "Não está bloqueado");
-                                System.out.printf("Já foi bloqueado %s vezes\n", c.blocksAmount());
-                                System.out.printf("Está no momento na coluna %s - %s\n", c.columnId(), c.columnName());
+                                System.out.println(ConsoleColors.primary("📋 DETALHES DO CARD"));
+                                System.out.printf("🆔 ID: %d | 📝 Título: %s\n", c.id(), c.title());
+                                System.out.printf("📄 Descrição: %s\n", c.description());
+                                System.out.println();
+                                
+                                if (c.blocked()) {
+                                    System.out.println(ConsoleColors.warning("🚫 Status: BLOQUEADO"));
+                                    System.out.printf("📝 Motivo: %s\n", c.blockReason());
+                                } else {
+                                    System.out.println(ConsoleColors.success("✅ Status: ATIVO"));
+                                }
+                                
+                                System.out.printf("📊 Total de bloqueios: %d\n", c.blocksAmount());
+                                System.out.printf("📁 Coluna atual: %s (ID: %d)\n", c.columnName(), c.columnId());
                             },
-                            () -> System.out.printf("Não existe um card com o id %s\n", selectedCardId));
+                            () -> System.out.println(ConsoleColors.error("❌ Card com ID " + selectedCardId + " não encontrado!"))
+                    );
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
-
+    
+    private void showStatistics() throws SQLException {
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("ESTATÍSTICAS DO BOARD");
+        
+        var boardColumnsInfo = entity.getBoardColumns().stream()
+                .map(bc -> new BoardColumnInfoDTO(bc.getId(), bc.getOrder(), bc.getKind()))
+                .toList();
+        
+        try(var connection = getConnection()){
+            var statsService = new StatisticsService(connection);
+            statsService.generateBoardStatistics(entity.getId(), boardColumnsInfo);
+            statsService.generateColumnStatistics(entity.getId(), boardColumnsInfo);
+            statsService.generatePerformanceReport(entity.getId());
+        }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
+    }
 }

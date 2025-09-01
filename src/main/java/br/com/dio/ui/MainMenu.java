@@ -5,6 +5,8 @@ import br.com.dio.persistence.entity.BoardColumnKindEnum;
 import br.com.dio.persistence.entity.BoardEntity;
 import br.com.dio.service.BoardQueryService;
 import br.com.dio.service.BoardService;
+import br.com.dio.ui.util.ConsoleColors;
+import br.com.dio.ui.util.InputValidator;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -19,91 +21,152 @@ import static br.com.dio.persistence.entity.BoardColumnKindEnum.PENDING;
 
 public class MainMenu {
 
-    private final Scanner scanner = new Scanner(System.in).useDelimiter("\n");
+    private final Scanner scanner;
+
+    public MainMenu() {
+        this.scanner = new Scanner(System.in);
+    }
 
     public void execute() throws SQLException {
-        System.out.println("Bem vindo ao gerenciador de boards, escolha a opção desejada");
-        var option = -1;
-        while (true){
-            System.out.println("1 - Criar um novo board");
-            System.out.println("2 - Selecionar um board existente");
-            System.out.println("3 - Excluir um board");
-            System.out.println("4 - Sair");
-            option = scanner.nextInt();
-            switch (option){
-                case 1 -> createBoard();
-                case 2 -> selectBoard();
-                case 3 -> deleteBoard();
-                case 4 -> System.exit(0);
-                default -> System.out.println("Opção inválida, informe uma opção do menu");
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("GERENCIADOR DE BOARDS");
+        
+        System.out.println(ConsoleColors.info("Bem-vindo ao gerenciador de boards! Escolha a opção desejada:"));
+        
+        boolean running = true;
+        while (running) {
+            try {
+                ConsoleColors.printSeparator();
+                System.out.println(ConsoleColors.primary("📋 MENU PRINCIPAL"));
+                System.out.println("1️⃣  - Criar um novo board");
+                System.out.println("2️⃣  - Selecionar um board existente");
+                System.out.println("3️⃣  - Excluir um board");
+                System.out.println("4️⃣  - Sair");
+                
+                System.out.print(ConsoleColors.info("\nEscolha uma opção: "));
+                String input = scanner.nextLine().trim();
+                
+                if (input.isEmpty()) {
+                    System.out.println(ConsoleColors.error("❌ Opção não pode estar vazia!"));
+                    continue;
+                }
+                
+                int option;
+                try {
+                    option = Integer.parseInt(input);
+                } catch (NumberFormatException e) {
+                    System.out.println(ConsoleColors.error("❌ Opção inválida! Digite um número de 1 a 4."));
+                    continue;
+                }
+                
+                switch (option) {
+                    case 1 -> createBoard();
+                    case 2 -> selectBoard();
+                    case 3 -> deleteBoard();
+                    case 4 -> {
+                        System.out.println(ConsoleColors.success("👋 Obrigado por usar o gerenciador de boards!"));
+                        running = false;
+                    }
+                    default -> System.out.println(ConsoleColors.error("❌ Opção inválida! Escolha uma opção de 1 a 4."));
+                }
+            } catch (Exception e) {
+                System.out.println(ConsoleColors.error("❌ Erro inesperado: " + e.getMessage()));
+                e.printStackTrace();
+                running = false;
             }
         }
     }
 
     private void createBoard() throws SQLException {
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("CRIAR NOVO BOARD");
+        
         var entity = new BoardEntity();
-        System.out.println("Informe o nome do seu board");
-        entity.setName(scanner.next());
-
-        System.out.println("Seu board terá colunas além das 3 padrões? Se sim informe quantas, senão digite '0'");
-        var additionalColumns = scanner.nextInt();
+        
+        System.out.println(ConsoleColors.info("Vamos criar seu novo board! 🚀"));
+        
+        entity.setName(InputValidator.validateName(scanner, "📝 Nome do board: ", "nome"));
+        
+        int additionalColumns = InputValidator.validatePositiveInteger(scanner, 
+            "📊 Quantas colunas adicionais além das 3 padrões? (0 para nenhuma): ", "número de colunas");
 
         List<BoardColumnEntity> columns = new ArrayList<>();
 
-        System.out.println("Informe o nome da coluna inicial do board");
-        var initialColumnName = scanner.next();
+        System.out.println(ConsoleColors.info("\n📋 Configurando colunas padrão:"));
+        
+        String initialColumnName = InputValidator.validateName(scanner, "🚀 Nome da coluna inicial: ", "nome da coluna inicial");
         var initialColumn = createColumn(initialColumnName, INITIAL, 0);
         columns.add(initialColumn);
 
         for (int i = 0; i < additionalColumns; i++) {
-            System.out.println("Informe o nome da coluna de tarefa pendente do board");
-            var pendingColumnName = scanner.next();
+            String pendingColumnName = InputValidator.validateName(scanner, 
+                String.format("⏳ Nome da coluna pendente %d: ", i + 1), "nome da coluna pendente");
             var pendingColumn = createColumn(pendingColumnName, PENDING, i + 1);
             columns.add(pendingColumn);
         }
 
-        System.out.println("Informe o nome da coluna final");
-        var finalColumnName = scanner.next();
+        String finalColumnName = InputValidator.validateName(scanner, "✅ Nome da coluna final: ", "nome da coluna final");
         var finalColumn = createColumn(finalColumnName, FINAL, additionalColumns + 1);
         columns.add(finalColumn);
 
-        System.out.println("Informe o nome da coluna de cancelamento do baord");
-        var cancelColumnName = scanner.next();
+        String cancelColumnName = InputValidator.validateName(scanner, "❌ Nome da coluna de cancelamento: ", "nome da coluna de cancelamento");
         var cancelColumn = createColumn(cancelColumnName, CANCEL, additionalColumns + 2);
         columns.add(cancelColumn);
 
         entity.setBoardColumns(columns);
+        
         try(var connection = getConnection()){
             var service = new BoardService(connection);
             service.insert(entity);
+            System.out.println(ConsoleColors.success("🎉 Board criado com sucesso!"));
+            System.out.println(ConsoleColors.info("ID do board: " + entity.getId()));
         }
 
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private void selectBoard() throws SQLException {
-        System.out.println("Informe o id do board que deseja selecionar");
-        var id = scanner.nextLong();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("SELECIONAR BOARD");
+        
+        Long id = InputValidator.validatePositiveLong(scanner, "🔍 ID do board: ", "ID do board");
+        
         try(var connection = getConnection()){
             var queryService = new BoardQueryService(connection);
             var optional = queryService.findById(id);
-            optional.ifPresentOrElse(
-                    b -> new BoardMenu(b).execute(),
-                    () -> System.out.printf("Não foi encontrado um board com id %s\n", id)
-            );
+            if (optional.isPresent()) {
+                new BoardMenu(optional.get()).execute();
+            } else {
+                System.out.println(ConsoleColors.error("❌ Board com ID " + id + " não encontrado!"));
+                InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
+            }
         }
     }
 
     private void deleteBoard() throws SQLException {
-        System.out.println("Informe o id do board que será excluido");
-        var id = scanner.nextLong();
+        ConsoleColors.clearScreen();
+        ConsoleColors.printHeader("EXCLUIR BOARD");
+        
+        Long id = InputValidator.validatePositiveLong(scanner, "🗑️  ID do board a ser excluído: ", "ID do board");
+        
+        boolean confirm = InputValidator.validateYesNo(scanner, "⚠️  Tem certeza que deseja excluir este board? Esta ação não pode ser desfeita!");
+        
+        if (!confirm) {
+            System.out.println(ConsoleColors.info("✅ Operação cancelada pelo usuário."));
+            InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
+            return;
+        }
+        
         try(var connection = getConnection()){
             var service = new BoardService(connection);
             if (service.delete(id)){
-                System.out.printf("O board %s foi excluido\n", id);
+                System.out.println(ConsoleColors.success("✅ Board " + id + " excluído com sucesso!"));
             } else {
-                System.out.printf("Não foi encontrado um board com id %s\n", id);
+                System.out.println(ConsoleColors.error("❌ Board com ID " + id + " não encontrado!"));
             }
         }
+        
+        InputValidator.waitForEnter(scanner, "Pressione ENTER para continuar...");
     }
 
     private BoardColumnEntity createColumn(final String name, final BoardColumnKindEnum kind, final int order){
@@ -113,5 +176,4 @@ public class MainMenu {
         boardColumn.setOrder(order);
         return boardColumn;
     }
-
 }
